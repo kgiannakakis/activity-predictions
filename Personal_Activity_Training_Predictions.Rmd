@@ -1,0 +1,93 @@
+---
+title: "Personal Activity Training Predictions"
+author: "Kostas Giannakakis"
+date: "16 January 2016"
+output: html_document
+---
+
+```{r dependencies, warning=FALSE, message=FALSE}
+library(caret)
+```
+
+
+```{r load_data, cache=TRUE}
+train <- read.csv("pml-training.csv", header=TRUE)
+test <- read.csv("pml-testing.csv", header=TRUE)
+```
+
+```{r cleaning_data, cache=TRUE}
+trainP <- train[,-(1:7)]
+testP <- test[,-(1:7)]
+
+countNAs <- function(c) { sum(is.na(c)) }
+nas <- sapply(testP, countNAs)
+
+trainP <- trainP[, nas != 20]
+testP <- testP[, nas != 20]
+```
+
+
+```{r data_sets, cache=TRUE}
+trainIndex <- createDataPartition(y=trainP$classe, p=0.6, list=FALSE)
+training <- trainP[trainIndex,]
+testingValidation <- trainP[-trainIndex,]
+
+testIndex <- createDataPartition(y=testingValidation$classe, p=0.5, list=FALSE)
+testing <- testingValidation[testIndex,]
+validation <- testingValidation[-testIndex,]
+```
+
+##Trees model
+
+```{r model_trees, cache=TRUE}
+timeTrees <- system.time(
+  modelTrees <- train(classe ~ ., method="rpart", data=training)
+)
+cmTreesTraining <- confusionMatrix(training$classe, predict(modelTrees, training))
+cmTreesTesting <- confusionMatrix(testing$classe, predict(modelTrees, testing))
+```
+
+##Random forests model
+
+```{r model_rf, cache=TRUE}
+timeRf <- system.time(
+  modelRf <- train(classe ~ ., method="rf", data=training, prox=TRUE)
+)
+cmRfTraining <- confusionMatrix(training$classe, predict(modelRf, training))
+cmRfTesting <- confusionMatrix(testing$classe, predict(modelRf, testing))
+```
+
+##Boosting model
+
+```{r model_boosting, cache=TRUE, message=FALSE}
+timeBoosting <- system.time(
+  modelBoosting <- train(classe ~ ., method="gbm", data=training, verbose=FALSE)
+)
+cmBoostingTraining <- confusionMatrix(training$classe, predict(modelBoosting, training))
+cmBoostingTesting <- confusionMatrix(testing$classe, predict(modelBoosting, testing))
+```
+
+##Results
+
+```{r results}
+results <- data.frame( train.accuracy = c(as.matrix(cmTreesTraining, what = "overall")[1,],
+                                          as.matrix(cmRfTraining, what = "overall")[1,],
+                                          as.matrix(cmBoostingTraining, what = "overall")[1,]),
+                       test.accuracy = c(as.matrix(cmTreesTesting, what = "overall")[1,],
+                                          as.matrix(cmRfTesting, what = "overall")[1,],
+                                          as.matrix(cmBoostingTesting, what = "overall")[1,]),
+                       time = c(timeTrees[[1]], timeRf[[1]], timeBoosting[[1]]))
+row.names(results) <- c("Trees", "Random forests", "Boosting")
+results
+
+```
+
+##Predictions
+```{r out_of_sample_errors, message=FALSE, warning=FALSE}
+cm <- confusionMatrix(testing$classe, predict(modelRf, validation))
+cm
+```
+
+```{r predictions, warning=FALSE, message=FALSE}
+predict(modelRf, testP) == predict(modelBoosting, testP)
+```
