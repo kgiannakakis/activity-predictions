@@ -69,10 +69,6 @@ img {
 
 
 <pre class="r"><code>library(caret)</code></pre>
-<pre><code>## Warning: package 'caret' was built under R version 3.2.3</code></pre>
-<pre><code>## Loading required package: lattice
-## Loading required package: ggplot2</code></pre>
-<pre><code>## Warning: package 'ggplot2' was built under R version 3.2.3</code></pre>
 <pre class="r"><code>train &lt;- read.csv(&quot;pml-training.csv&quot;, header=TRUE)
 test &lt;- read.csv(&quot;pml-testing.csv&quot;, header=TRUE)</code></pre>
 <pre class="r"><code>trainP &lt;- train[,-(1:7)]
@@ -83,82 +79,92 @@ nas &lt;- sapply(testP, countNAs)
 
 trainP &lt;- trainP[, nas != 20]
 testP &lt;- testP[, nas != 20]</code></pre>
-<pre class="r"><code>trainIndex &lt;- createDataPartition(y=trainP$classe, p=0.7, list=FALSE)
+<pre class="r"><code>trainIndex &lt;- createDataPartition(y=trainP$classe, p=0.6, list=FALSE)
 training &lt;- trainP[trainIndex,]
-testing &lt;- trainP[-trainIndex,]</code></pre>
-<pre class="r"><code>model &lt;- train(classe ~ ., method=&quot;rpart&quot;, data=training)</code></pre>
-<pre><code>## Loading required package: rpart</code></pre>
-<pre class="r"><code>#model &lt;- train(classe ~ ., method=&quot;gbm&quot;, data=training, verbose = FALSE)
+testingValidation &lt;- trainP[-trainIndex,]
 
-
-confusionMatrix(training$classe, predict(model, training))</code></pre>
+testIndex &lt;- createDataPartition(y=testingValidation$classe, p=0.5, list=FALSE)
+testing &lt;- testingValidation[testIndex,]
+validation &lt;- testingValidation[-testIndex,]</code></pre>
+<div id="trees-model" class="section level2">
+<h2>Trees model</h2>
+<pre class="r"><code>timeTrees &lt;- system.time(
+  modelTrees &lt;- train(classe ~ ., method=&quot;rpart&quot;, data=training)
+)
+cmTreesTraining &lt;- confusionMatrix(training$classe, predict(modelTrees, training))
+cmTreesTesting &lt;- confusionMatrix(testing$classe, predict(modelTrees, testing))</code></pre>
+</div>
+<div id="random-forests-model" class="section level2">
+<h2>Random forests model</h2>
+<pre class="r"><code>timeRf &lt;- system.time(
+  modelRf &lt;- train(classe ~ ., method=&quot;rf&quot;, data=training, prox=TRUE)
+)
+cmRfTraining &lt;- confusionMatrix(training$classe, predict(modelRf, training))
+cmRfTesting &lt;- confusionMatrix(testing$classe, predict(modelRf, testing))</code></pre>
+</div>
+<div id="boosting-model" class="section level2">
+<h2>Boosting model</h2>
+<pre class="r"><code>timeBoosting &lt;- system.time(
+  modelBoosting &lt;- train(classe ~ ., method=&quot;gbm&quot;, data=training, verbose=FALSE)
+)
+cmBoostingTraining &lt;- confusionMatrix(training$classe, predict(modelBoosting, training))
+cmBoostingTesting &lt;- confusionMatrix(testing$classe, predict(modelBoosting, testing))</code></pre>
+</div>
+<div id="results" class="section level2">
+<h2>Results</h2>
+<pre class="r"><code>results &lt;- data.frame( train.accuracy = c(as.matrix(cmTreesTraining, what = &quot;overall&quot;)[1,],
+                                          as.matrix(cmRfTraining, what = &quot;overall&quot;)[1,],
+                                          as.matrix(cmBoostingTraining, what = &quot;overall&quot;)[1,]),
+                       test.accuracy = c(as.matrix(cmTreesTesting, what = &quot;overall&quot;)[1,],
+                                          as.matrix(cmRfTesting, what = &quot;overall&quot;)[1,],
+                                          as.matrix(cmBoostingTesting, what = &quot;overall&quot;)[1,]),
+                       time = c(timeTrees[[1]], timeRf[[1]], timeBoosting[[1]]))
+row.names(results) &lt;- c(&quot;Trees&quot;, &quot;Random forests&quot;, &quot;Boosting&quot;)
+results</code></pre>
+<pre><code>##                train.accuracy test.accuracy     time
+## Trees               0.4968580     0.4973235    78.03
+## Random forests      1.0000000     0.9900586 19525.04
+## Boosting            0.9755435     0.9599796  1999.66</code></pre>
+</div>
+<div id="predictions" class="section level2">
+<h2>Predictions</h2>
+<pre class="r"><code>cm &lt;- confusionMatrix(testing$classe, predict(modelRf, validation))
+cm</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 3552   56  290    0    8
-##          B 1101  915  642    0    0
-##          C 1123   76 1197    0    0
-##          D  996  396  860    0    0
-##          E  371  332  689    0 1133
+##          A 1115    1    0    0    0
+##          B    8  749    2    0    0
+##          C    0   11  669    4    0
+##          D    0    0   10  633    0
+##          E    0    0    3    4  714
 ## 
 ## Overall Statistics
 ##                                           
-##                Accuracy : 0.4948          
-##                  95% CI : (0.4864, 0.5032)
-##     No Information Rate : 0.52            
-##     P-Value [Acc &gt; NIR] : 1               
+##                Accuracy : 0.989           
+##                  95% CI : (0.9853, 0.9921)
+##     No Information Rate : 0.2863          
+##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
 ##                                           
-##                   Kappa : 0.3398          
+##                   Kappa : 0.9861          
 ##  Mcnemar's Test P-Value : NA              
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.4973  0.51549  0.32545       NA  0.99299
-## Specificity            0.9463  0.85429  0.88080   0.8361  0.88949
-## Pos Pred Value         0.9094  0.34424  0.49958       NA  0.44871
-## Neg Pred Value         0.6347  0.92238  0.78124       NA  0.99929
-## Prevalence             0.5200  0.12921  0.26774   0.0000  0.08306
-## Detection Rate         0.2586  0.06661  0.08714   0.0000  0.08248
-## Detection Prevalence   0.2843  0.19349  0.17442   0.1639  0.18381
-## Balanced Accuracy      0.7218  0.68489  0.60313       NA  0.94124</code></pre>
-<pre class="r"><code>confusionMatrix(testing$classe, predict(model, testing))</code></pre>
-<pre><code>## Confusion Matrix and Statistics
-## 
-##           Reference
-## Prediction    A    B    C    D    E
-##          A 1530   25  113    0    6
-##          B  485  371  283    0    0
-##          C  464   32  530    0    0
-##          D  453  172  339    0    0
-##          E  153  154  277    0  498
-## 
-## Overall Statistics
-##                                           
-##                Accuracy : 0.4977          
-##                  95% CI : (0.4849, 0.5106)
-##     No Information Rate : 0.5242          
-##     P-Value [Acc &gt; NIR] : 1               
-##                                           
-##                   Kappa : 0.3431          
-##  Mcnemar's Test P-Value : NA              
-## 
-## Statistics by Class:
-## 
-##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.4959  0.49204  0.34371       NA  0.98810
-## Specificity            0.9486  0.85032  0.88579   0.8362  0.89147
-## Pos Pred Value         0.9140  0.32572  0.51657       NA  0.46026
-## Neg Pred Value         0.6307  0.91930  0.79173       NA  0.99875
-## Prevalence             0.5242  0.12812  0.26202   0.0000  0.08564
-## Detection Rate         0.2600  0.06304  0.09006   0.0000  0.08462
-## Detection Prevalence   0.2845  0.19354  0.17434   0.1638  0.18386
-## Balanced Accuracy      0.7223  0.67118  0.61475       NA  0.93978</code></pre>
-<pre class="r"><code>predict(model, testP)</code></pre>
-<pre><code>##  [1] C A C A A C C A A A C C C A C A A A A C
-## Levels: A B C D E</code></pre>
-<pre class="r"><code># B A B A A E D B A A B C B A E E A B B B</code></pre>
+## Sensitivity            0.9929   0.9842   0.9781   0.9875   1.0000
+## Specificity            0.9996   0.9968   0.9954   0.9970   0.9978
+## Pos Pred Value         0.9991   0.9868   0.9781   0.9844   0.9903
+## Neg Pred Value         0.9971   0.9962   0.9954   0.9976   1.0000
+## Prevalence             0.2863   0.1940   0.1744   0.1634   0.1820
+## Detection Rate         0.2842   0.1909   0.1705   0.1614   0.1820
+## Detection Prevalence   0.2845   0.1935   0.1744   0.1639   0.1838
+## Balanced Accuracy      0.9963   0.9905   0.9867   0.9922   0.9989</code></pre>
+<pre class="r"><code>predict(modelRf, testP) == predict(modelBoosting, testP)</code></pre>
+<pre><code>##  [1] TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE
+## [15] TRUE TRUE TRUE TRUE TRUE TRUE</code></pre>
+</div>
 
 
 </div>
