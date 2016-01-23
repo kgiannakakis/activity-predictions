@@ -68,9 +68,21 @@ img {
 </div>
 
 
+<div id="executive-summary" class="section level2">
+<h2>Executive Summary</h2>
+<p>Aim of this report is to recognize human activity from sensor values. The data come from <a href="http://groupware.les.inf.puc-rio.br/har"><a href="http://groupware.les.inf.puc-rio.br/har" class="uri">http://groupware.les.inf.puc-rio.br/har</a></a>. Three different models are tried out and cross validation is used to select the best one. Accuracy metric is used to compare the model. It is found out that at least two models (Random Forests and Boosting) can predict the outcome with high accuracy.</p>
+</div>
+<div id="prerequisites" class="section level2">
+<h2>Prerequisites</h2>
+<p>The analysis uses the caret package.</p>
 <pre class="r"><code>library(caret)</code></pre>
+</div>
+<div id="cleaning-data-and-features-selection" class="section level2">
+<h2>Cleaning data and features selection</h2>
+<p>We initially read the data and load them into data frames. There are two data sets. The first one will be used for training the models and the second one for doing predictions. The second one doesn’t contain the outcome information and the results are only to be found by submitting the corresponding quiz in Coursera.</p>
 <pre class="r"><code>train &lt;- read.csv(&quot;pml-training.csv&quot;, header=TRUE)
 test &lt;- read.csv(&quot;pml-testing.csv&quot;, header=TRUE)</code></pre>
+<p>After we have loaded the data, we need to select the features we are going to use for prediction. The first seven columns are removed, because they contain information that is obviously irrelevant with the human activity (person’s name, time stamps). After that, we notice that many columns are empty and only contain NA values. These columns are removed and we are left with the outcome and 52 features. Although more analysis could be performed to further reduce this number, based on the contribution of each feature to the variability, the decision is made to use all of them to build the model. This will result to slower model training, but also to higher accuracy.</p>
 <pre class="r"><code>trainP &lt;- train[,-(1:7)]
 testP &lt;- test[,-(1:7)]
 
@@ -79,6 +91,10 @@ nas &lt;- sapply(testP, countNAs)
 
 trainP &lt;- trainP[, nas != 20]
 testP &lt;- testP[, nas != 20]</code></pre>
+</div>
+<div id="cross-validation" class="section level2">
+<h2>Cross Validation</h2>
+<p>In order to perform cross validation, we split the data in three data sets: training (60%), testing (20%) and validation (20%). The training set will be used to train the models. All three models will be compared by making predictions with the testing set. The best one will be selected and predictions with the validation set will give an accurate estimation of the out of sample error. The inclusion of the third validation data set is necessary, as the testing set is used to compare the models and therefore takes part in the model building.</p>
 <pre class="r"><code>trainIndex &lt;- createDataPartition(y=trainP$classe, p=0.6, list=FALSE)
 training &lt;- trainP[trainIndex,]
 testingValidation &lt;- trainP[-trainIndex,]
@@ -86,32 +102,37 @@ testingValidation &lt;- trainP[-trainIndex,]
 testIndex &lt;- createDataPartition(y=testingValidation$classe, p=0.5, list=FALSE)
 testing &lt;- testingValidation[testIndex,]
 validation &lt;- testingValidation[-testIndex,]</code></pre>
-<div id="trees-model" class="section level2">
-<h2>Trees model</h2>
+</div>
+<div id="models-training" class="section level2">
+<h2>Models training</h2>
+<p>The first model uses the Trees algorithm. For all models the caret package is use. The train method is timed in order to be able to compare the time efficiency of the algorithms. The other two models are Random Forests and Boosting.</p>
+<div id="trees-model" class="section level3">
+<h3>Trees model</h3>
 <pre class="r"><code>timeTrees &lt;- system.time(
   modelTrees &lt;- train(classe ~ ., method=&quot;rpart&quot;, data=training)
 )
 cmTreesTraining &lt;- confusionMatrix(training$classe, predict(modelTrees, training))
 cmTreesTesting &lt;- confusionMatrix(testing$classe, predict(modelTrees, testing))</code></pre>
 </div>
-<div id="random-forests-model" class="section level2">
-<h2>Random forests model</h2>
+<div id="random-forests-model" class="section level3">
+<h3>Random forests model</h3>
 <pre class="r"><code>timeRf &lt;- system.time(
   modelRf &lt;- train(classe ~ ., method=&quot;rf&quot;, data=training, prox=TRUE)
 )
 cmRfTraining &lt;- confusionMatrix(training$classe, predict(modelRf, training))
 cmRfTesting &lt;- confusionMatrix(testing$classe, predict(modelRf, testing))</code></pre>
 </div>
-<div id="boosting-model" class="section level2">
-<h2>Boosting model</h2>
+<div id="boosting-model" class="section level3">
+<h3>Boosting model</h3>
 <pre class="r"><code>timeBoosting &lt;- system.time(
   modelBoosting &lt;- train(classe ~ ., method=&quot;gbm&quot;, data=training, verbose=FALSE)
 )
 cmBoostingTraining &lt;- confusionMatrix(training$classe, predict(modelBoosting, training))
 cmBoostingTesting &lt;- confusionMatrix(testing$classe, predict(modelBoosting, testing))</code></pre>
 </div>
-<div id="results" class="section level2">
-<h2>Results</h2>
+<div id="results" class="section level3">
+<h3>Results</h3>
+<p>In order to compare the results, we make a table with the accuracy of the models in training and testing data set and also the time in seconds, it took to train. We notice that the Trees model has very low accuracy, close to 0.5 and is therefore inappropriate for making predictions. The other two models exhibit impresive accuracy both in the training and testing set. In fact in training set the Random Forest model has perfect accuracy (100%)! This could be a sign of overfitting, but still the accuracy in the testing set is also close to 100%. The Random Forest model is more accurate than Boosting, but it is also 10 times slower! For this reason Boosting seems a better solution.</p>
 <pre class="r"><code>results &lt;- data.frame( train.accuracy = c(as.matrix(cmTreesTraining, what = &quot;overall&quot;)[1,],
                                           as.matrix(cmRfTraining, what = &quot;overall&quot;)[1,],
                                           as.matrix(cmBoostingTraining, what = &quot;overall&quot;)[1,]),
@@ -126,41 +147,44 @@ results</code></pre>
 ## Random forests      1.0000000     0.9900586 19525.04
 ## Boosting            0.9755435     0.9599796  1999.66</code></pre>
 </div>
+</div>
 <div id="predictions" class="section level2">
 <h2>Predictions</h2>
-<pre class="r"><code>cm &lt;- confusionMatrix(testing$classe, predict(modelRf, validation))
+<p>In order to get an estimate of the out of sample error, we calculate accuracy and other metrics in the validation data set. We use the boosting model, which although it exhibits less accuracy than Random Forests, is considerably faster. We notice that accuracy in the validation data set is also very high.</p>
+<pre class="r"><code>cm &lt;- confusionMatrix(testing$classe, predict(modelBoosting, validation))
 cm</code></pre>
 <pre><code>## Confusion Matrix and Statistics
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 1115    1    0    0    0
-##          B    8  749    2    0    0
-##          C    0   11  669    4    0
-##          D    0    0   10  633    0
-##          E    0    0    3    4  714
+##          A 1097   13    1    4    1
+##          B   16  711   28    3    1
+##          C    0   25  647    9    3
+##          D    2    4   23  608    6
+##          E    4   10    6   12  689
 ## 
 ## Overall Statistics
 ##                                           
-##                Accuracy : 0.989           
-##                  95% CI : (0.9853, 0.9921)
-##     No Information Rate : 0.2863          
-##     P-Value [Acc &gt; NIR] : &lt; 2.2e-16       
+##                Accuracy : 0.9564          
+##                  95% CI : (0.9495, 0.9626)
+##     No Information Rate : 0.2852          
+##     P-Value [Acc &gt; NIR] : &lt; 2e-16         
 ##                                           
-##                   Kappa : 0.9861          
-##  Mcnemar's Test P-Value : NA              
+##                   Kappa : 0.9449          
+##  Mcnemar's Test P-Value : 0.02423         
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9929   0.9842   0.9781   0.9875   1.0000
-## Specificity            0.9996   0.9968   0.9954   0.9970   0.9978
-## Pos Pred Value         0.9991   0.9868   0.9781   0.9844   0.9903
-## Neg Pred Value         0.9971   0.9962   0.9954   0.9976   1.0000
-## Prevalence             0.2863   0.1940   0.1744   0.1634   0.1820
-## Detection Rate         0.2842   0.1909   0.1705   0.1614   0.1820
+## Sensitivity            0.9803   0.9318   0.9177   0.9560   0.9843
+## Specificity            0.9932   0.9848   0.9885   0.9894   0.9901
+## Pos Pred Value         0.9830   0.9368   0.9459   0.9456   0.9556
+## Neg Pred Value         0.9922   0.9836   0.9821   0.9915   0.9966
+## Prevalence             0.2852   0.1945   0.1797   0.1621   0.1784
+## Detection Rate         0.2796   0.1812   0.1649   0.1550   0.1756
 ## Detection Prevalence   0.2845   0.1935   0.1744   0.1639   0.1838
-## Balanced Accuracy      0.9963   0.9905   0.9867   0.9922   0.9989</code></pre>
+## Balanced Accuracy      0.9868   0.9583   0.9531   0.9727   0.9872</code></pre>
+<p>As a final test, we make predictions on the test set. The results aren’t presented here. However, they scored 100% in the Coursera quiz. We also note that the best two models, make the same predictions. This give us another reason for selecting Boosting over Random Forests.</p>
 <pre class="r"><code>predict(modelRf, testP) == predict(modelBoosting, testP)</code></pre>
 <pre><code>##  [1] TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE TRUE
 ## [15] TRUE TRUE TRUE TRUE TRUE TRUE</code></pre>
