@@ -5,15 +5,26 @@ date: "16 January 2016"
 output: html_document
 ---
 
+##Executive Summary
+Aim of this report is to recognize human activity from sensor values. The data come from [http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har). Three different models are tried out and cross validation is used to select the best one. Accuracy metric is used to compare the model. It is found out that at least two models (Random Forests and Boosting) can predict the outcome with high accuracy.
+
+##Prerequisites
+The analysis uses the caret package.
+
 ```{r dependencies, warning=FALSE, message=FALSE}
 library(caret)
 ```
 
+##Cleaning data and features selection
+
+We initially read the data and load them into data frames. There are two data sets. The first one will be used for training the models and the second one for doing predictions. The second one doesn't contain the outcome information and the results are only to be found by submitting the corresponding quiz in Coursera.
 
 ```{r load_data, cache=TRUE}
 train <- read.csv("pml-training.csv", header=TRUE)
 test <- read.csv("pml-testing.csv", header=TRUE)
 ```
+
+After we have loaded the data, we need to select the features we are going to use for prediction. The first seven columns are removed, because they contain information that is obviously irrelevant with the human activity (person's name, time stamps). After that, we notice that many columns are empty and only contain NA values. These columns are removed and we are left with the outcome and 52 features. Although more analysis could be performed to further reduce this number, based on the contribution of each feature to the variability, the decision is made to use all of them to build the model. This will result with slower model training, but also to higher accuracy.
 
 ```{r cleaning_data, cache=TRUE}
 trainP <- train[,-(1:7)]
@@ -26,6 +37,7 @@ trainP <- trainP[, nas != 20]
 testP <- testP[, nas != 20]
 ```
 
+##Cross Validation
 
 ```{r data_sets, cache=TRUE}
 trainIndex <- createDataPartition(y=trainP$classe, p=0.6, list=FALSE)
